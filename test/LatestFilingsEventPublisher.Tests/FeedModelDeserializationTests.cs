@@ -3,7 +3,7 @@ using Xunit;
 
 namespace LatestFilingsEventPublisher.Tests;
 
-public class FeedDeserializationTests
+public class FeedModelDeserializationTests
 {
     public static string ExampleFeed => "<?xml version=\"1.0\" encoding=\"ISO-8859-1\" ?>\r\n" +
         "<feed xmlns=\"http://www.w3.org/2005/Atom\">\r\n" +
@@ -35,7 +35,7 @@ public class FeedDeserializationTests
         "</feed>";
 
     /// <summary>
-    /// Tests a samlple RSS feed deserializes indicating the <see cref="FeedModel"/> class is correctly structured and annotated for XML serialization.
+    /// Tests a sample RSS feed deserializes indicating the <see cref="FeedModel"/> class is correctly structured and annotated for XML serialization.
     /// </summary>
     [Fact]
     public void Deserialize_ValidInput_ValidResult()
