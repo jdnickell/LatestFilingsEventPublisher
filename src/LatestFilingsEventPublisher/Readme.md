@@ -1,8 +1,26 @@
+# LatestFilingsEventPublisher
 
-Triggered on schedule by EventBridge scheduled rule.
-Poll the SEC website for the latest filings and publish them to an SNS topic.
-https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent
-https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&CIK=&type=&company=&dateb=&owner=include&start=0&count=40&output=atom
+* Triggered on schedule by EventBridge scheduled rule.
+* Poll the SEC website for the latest filings and publish them to an SNS topic.
+
+# Why poll an RSS feed for this information?
+
+At the time of writing this, the SEC websites recommends polling the RSS feed for the latest filings to get as close to real time updates as possible. 
+Read the docs here: https://www.sec.gov/os/webmaster-faq.
+
+One notable point:
+
+    Sample Declared Bot Request Headers:
+
+        User-Agent: Sample Company Name AdminContact@<sample company domain>.com
+
+        Accept-Encoding: gzip, deflate
+
+        Host: www.sec.gov
+
+However, if you do not provide the User-Agent in a format such as: `Mozilla/5.0 (YourCompany you@example.com)`, you will receive a 403 Forbidden response.
+
+An Api exists for specific requests by CIK. See https://www.sec.gov/edgar/sec-api-documentation.
 
 # AWS Lambda Native AOT Project
 

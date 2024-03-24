@@ -5,13 +5,22 @@ namespace LatestFilingsEventPublisher.Tests;
 
 public class FunctionTest
 {
+    /// <summary>
+    /// Tests that the request to get the RSS feed and deserialize the response does not throw an exception.
+    /// </summary>
     [Fact]
-    public void TestToUpperFunction()
+    public async void FunctionHandler_NoException()
     {
-        // Invoke the lambda function and confirm the string was upper cased.
+        // Arrange
         var context = new TestLambdaContext();
-        var upperCase = Function.FunctionHandler("hello world", context);
 
-        Assert.Equal("HELLO WORLD", upperCase);
+        // Act
+        var exception = await Record.ExceptionAsync(async () =>
+        {
+            await Function.FunctionHandler(context);
+        });
+
+        // Assert
+        Assert.Null(exception);
     }
 }

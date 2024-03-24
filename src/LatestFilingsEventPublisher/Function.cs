@@ -1,7 +1,8 @@
 using Amazon.Lambda.Core;
 using Amazon.Lambda.RuntimeSupport;
-using Amazon.Lambda.Serialization.SystemTextJson;
-using System.Text.Json.Serialization;
+using System.Diagnostics.CodeAnalysis;
+using System.Net;
+using System.Xml.Serialization;
 
 namespace LatestFilingsEventPublisher;
 
@@ -14,47 +15,38 @@ public class Function
     /// </summary>
     private static async Task Main()
     {
-        Func<string, ILambdaContext, string> handler = FunctionHandler;
-        await LambdaBootstrapBuilder.Create(handler, new SourceGeneratorLambdaJsonSerializer<LambdaFunctionJsonSerializerContext>())
+        await LambdaBootstrapBuilder.Create(FunctionHandler)
             .Build()
             .RunAsync();
     }
 
     /// <summary>
-    /// A simple function that takes a string and does a ToUpper.
-    ///
-    /// To use this handler to respond to an AWS event, reference the appropriate package from 
-    /// https://github.com/aws/aws-lambda-dotnet#events
-    /// and change the string input parameter to the desired event type. When the event type
-    /// is changed, the handler type registered in the main method needs to be updated and the LambdaFunctionJsonSerializerContext 
-    /// defined below will need the JsonSerializable updated. If the return type and event type are different then the 
-    /// LambdaFunctionJsonSerializerContext must have two JsonSerializable attributes, one for each type.
-    ///
-    // When using Native AOT extra testing with the deployed Lambda functions is required to ensure
-    // the libraries used in the Lambda function work correctly with Native AOT. If a runtime 
-    // error occurs about missing types or methods the most likely solution will be to remove references to trim-unsafe 
-    // code or configure trimming options. This sample defaults to partial TrimMode because currently the AWS 
-    // SDK for .NET does not support trimming. This will result in a larger executable size, and still does not 
-    // guarantee runtime trimming errors won't be hit. 
+    /// Work in progress: This function will be invoked by the Lambda runtime for each event and currently deserializes the RSS feed and logs a message.
     /// </summary>
-    /// <param name="input">The event for the Lambda function handler to process.</param>
     /// <param name="context">The ILambdaContext that provides methods for logging and describing the Lambda environment.</param>
-    /// <returns></returns>
-    public static string FunctionHandler(string input, ILambdaContext context)
+    [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code", Justification = "The XML serialization required is minimal and has been tested.")]
+    public static async Task FunctionHandler(ILambdaContext context)
     {
-        return input.ToUpper();
-    }
-}
+        string url = "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&CIK=&type=&company=&dateb=&owner=include&start=0&count=40&output=atom";
 
-/// <summary>
-/// This class is used to register the input event and return type for the FunctionHandler method with the System.Text.Json source generator.
-/// There must be a JsonSerializable attribute for each type used as the input and return type or a runtime error will occur 
-/// from the JSON serializer unable to find the serialization information for unknown types.
-/// </summary>
-[JsonSerializable(typeof(string))]
-public partial class LambdaFunctionJsonSerializerContext : JsonSerializerContext
-{
-    // By using this partial class derived from JsonSerializerContext, we can generate reflection free JSON Serializer code at compile time
-    // which can deserialize our class and properties. However, we must attribute this class to tell it what types to generate serialization code for.
-    // See https://docs.microsoft.com/en-us/dotnet/standard/serialization/system-text-json-source-generation
+        HttpClient client = new(new HttpClientHandler
+        {
+            AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
+        });
+        client.DefaultRequestHeaders.Host = "www.sec.gov";
+        client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (YourCompany you@example.com)");
+
+        // TODO: Needs to page result.
+        HttpResponseMessage response = await client.GetAsync(url);
+        response.EnsureSuccessStatusCode();
+        string result = await response.Content.ReadAsStringAsync();
+
+        var serializer = new XmlSerializer(typeof(FeedModel.Feed));
+        using TextReader reader = new StringReader(result);
+
+        var deserializedFeed = serializer.Deserialize(reader) as FeedModel.Feed;
+
+        // TODO: Error handling and logging
+        // TODO: Publish your events
+    }
 }
