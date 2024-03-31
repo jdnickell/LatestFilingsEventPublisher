@@ -1,52 +1,76 @@
 using Amazon.Lambda.Core;
-using Amazon.Lambda.RuntimeSupport;
-using System.Diagnostics.CodeAnalysis;
+using Amazon.SimpleNotificationService;
+using Amazon.SimpleNotificationService.Model;
 using System.Net;
+using System.Text.Json;
 using System.Xml.Serialization;
+using static LatestFilingsEventPublisher.FeedModel;
+
+// Assembly attribute to enable the Lambda function's JSON input to be converted into a .NET class.
+[assembly: LambdaSerializer(typeof(Amazon.Lambda.Serialization.SystemTextJson.DefaultLambdaJsonSerializer))]
 
 namespace LatestFilingsEventPublisher;
-
 public class Function
 {
+    // TODO: Get from configuration.
+    public const string SNS_TOPIC_ARN = "TODOYourSNSTopicArn";
+
     /// <summary>
-    /// The main entry point for the Lambda function. The main function is called once during the Lambda init phase. It
-    /// initializes the .NET Lambda runtime client passing in the function handler to invoke for each Lambda event and
-    /// the JSON serializer to use for converting Lambda JSON format to the .NET types. 
+    /// Default constructor. This constructor is used by Lambda to construct the instance. When invoked in a Lambda environment
+    /// the AWS credentials will come from the IAM role associated with the function and the AWS region will be set to the
+    /// region the Lambda function is executed in.
     /// </summary>
-    private static async Task Main()
+    public Function()
     {
-        await LambdaBootstrapBuilder.Create(FunctionHandler)
-            .Build()
-            .RunAsync();
+
     }
 
     /// <summary>
-    /// Work in progress: This function will be invoked by the Lambda runtime for each event and currently deserializes the RSS feed and logs a message.
+    /// Poll the SEC RSS feed for the latest filings and publish them to an SNS topic.
     /// </summary>
-    /// <param name="context">The ILambdaContext that provides methods for logging and describing the Lambda environment.</param>
-    [UnconditionalSuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code", Justification = "The XML serialization required is minimal and has been tested.")]
-    public static async Task FunctionHandler(ILambdaContext context)
+    /// <param name="context">The <see cref="ILambdaContext"/>.</param>
+    /// <returns>An awaitable task.</returns>
+    public async Task FunctionHandler(ILambdaContext context)
     {
+        // TODO: Last run logic - Compare to a stored 'last run time' to avoid publishing events new filings that have already been published, return if there are no new filings.
         string url = "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&CIK=&type=&company=&dateb=&owner=include&start=0&count=40&output=atom";
 
-        HttpClient client = new(new HttpClientHandler
+        HttpClient httpClient = new(new HttpClientHandler
         {
             AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
         });
-        client.DefaultRequestHeaders.Host = "www.sec.gov";
-        client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (YourCompany you@example.com)");
+        httpClient.DefaultRequestHeaders.Host = "www.sec.gov";
+        httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (None jdnickell@gmail.com)");
 
         // TODO: Needs to page result.
-        HttpResponseMessage response = await client.GetAsync(url);
+        HttpResponseMessage response = await httpClient.GetAsync(url);
         response.EnsureSuccessStatusCode();
         string result = await response.Content.ReadAsStringAsync();
 
-        var serializer = new XmlSerializer(typeof(FeedModel.Feed));
+        var serializer = new XmlSerializer(typeof(Feed));
         using TextReader reader = new StringReader(result);
 
-        var deserializedFeed = serializer.Deserialize(reader) as FeedModel.Feed;
 
-        // TODO: Error handling and logging
-        // TODO: Publish your events
+        if (serializer.Deserialize(reader) is not FeedModel.Feed deserializedFeed || deserializedFeed.Entries.Length == 0)
+            return;
+
+        AmazonSimpleNotificationServiceClient snsClient = new();
+
+        // TODO: Last run logic - Store the last run time to avoid publishing events new filings that have already been published.
+        var feedUpdated = deserializedFeed.Updated;
+        context.Logger.LogInformation($"Feed last updated: {feedUpdated}");
+        context.Logger.LogInformation($"Publishing {deserializedFeed.Entries.Length} new filings.");
+
+        foreach (var entry in deserializedFeed.Entries)
+        {
+            context.Logger.LogInformation($"New filing published: {entry.Title}.");
+            await snsClient.PublishAsync(new PublishRequest
+            {
+                TopicArn = SNS_TOPIC_ARN,
+                Message = JsonSerializer.Serialize(entry)
+            });
+        }
+
+        // TODO: Error handling
     }
 }

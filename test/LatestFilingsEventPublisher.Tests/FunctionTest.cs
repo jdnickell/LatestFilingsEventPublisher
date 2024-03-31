@@ -13,11 +13,12 @@ public class FunctionTest
     {
         // Arrange
         var context = new TestLambdaContext();
+        var function = new Function();
 
         // Act
         var exception = await Record.ExceptionAsync(async () =>
         {
-            await Function.FunctionHandler(context);
+            await function.FunctionHandler(context);
         });
 
         // Assert
