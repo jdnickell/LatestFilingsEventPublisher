@@ -1,7 +1,6 @@
 # LatestFilingsEventPublisher
 
 * This project is useful for monitoring the latest filings in near real time and potentially alerting or triggering other processes. 
-
 It is not for collecting and storing historical data. For that, you can explore other options from the SEC website. 
 
 * Triggered by [EventBridge Scheduler](https://docs.aws.amazon.com/scheduler/latest/UserGuide/setting-up.html) on any frequency > 10 seconds between 6 a.m. and 10 p.m. EST.
