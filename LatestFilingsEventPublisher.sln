@@ -5,7 +5,7 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LatestFilingsEventPublisher", "src\LatestFilingsEventPublisher\LatestFilingsEventPublisher.csproj", "{A07472E6-FCEB-4D4C-B7B7-DAA19B7734CE}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LatestFilingsEventPublisher.Tests", "test\LatestFilingsEventPublisher.Tests\LatestFilingsEventPublisher.Tests.csproj", "{9A46B2C7-0905-457F-B147-37C20027D444}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LatestFilingsEventPublisher.UnitTests", "test\LatestFilingsEventPublisher.Tests\LatestFilingsEventPublisher.UnitTests.csproj", "{9A46B2C7-0905-457F-B147-37C20027D444}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "SolutionItems", "SolutionItems", "{461D2225-B778-43D7-B603-DA4A02228374}"
 	ProjectSection(SolutionItems) = preProject
@@ -29,5 +29,8 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {CB4D9691-34EF-4FE9-92C1-F01E18106CA6}
 	EndGlobalSection
 EndGlobal

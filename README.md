@@ -1,12 +1,12 @@
 # LatestFilingsEventPublisher
 
-* Triggered on schedule by EventBridge scheduled rule.
-* Poll the SEC website for the latest filings and publish them to an SNS topic.
+* This project is useful for monitoring the latest filings in near real time and potentially alerting or triggering other processes. 
 
-# Why poll an RSS feed for this information?
+It is not for collecting and storing historical data. For that, you can explore other options from the SEC website. 
 
-At the time of writing this, the SEC websites recommends polling the RSS feed for the latest filings to get as close to real time updates as possible. 
-Read the docs here: https://www.sec.gov/os/webmaster-faq.
+* Triggered by [EventBridge Scheduler](https://docs.aws.amazon.com/scheduler/latest/UserGuide/setting-up.html) on any frequency > 10 seconds between 6 a.m. and 10 p.m. EST.
+* Polls the SEC website for the latest filings and publishes them to an SNS topic.
+* At the time of writing this, the SEC websites recommends polling the RSS feed for the latest filings to get as close to real time updates as possible. Read the docs here: https://www.sec.gov/os/webmaster-faq.
 
 One notable point:
 
@@ -19,12 +19,6 @@ One notable point:
         Host: www.sec.gov
 
 However, if you do not provide the User-Agent in a format such as: `Mozilla/5.0 (YourCompany you@example.com)`, you will receive a 403 Forbidden response.
-
-An Api exists for specific requests by CIK. See https://www.sec.gov/edgar/sec-api-documentation.
-
-## Docker requirement
-
-Docker is required to be installed and running when building .NET Native AOT Lambda functions on any platform besides Amazon Linux 2023. Information on how acquire Docker can be found here: https://docs.docker.com/get-docker/
 
 ## Here are some steps to follow from Visual Studio:
 
