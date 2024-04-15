@@ -62,7 +62,7 @@ public class Function
         serviceCollection.AddHttpClient(RSS_HTTP_CLIENT_NAME, client =>
         {
             client.DefaultRequestHeaders.Host = "www.sec.gov";
-            client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (None jdnickell@gmail.com)");
+            client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (None you@example.org)");
         })
         .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
         {
