@@ -1,6 +1,7 @@
 using Amazon.Lambda.Core;
 using Amazon.SimpleNotificationService;
 using Amazon.SimpleNotificationService.Model;
+using Amazon.SimpleSystemsManagement;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -15,8 +16,8 @@ namespace LatestFilingsEventPublisher;
 
 public class Function
 {
-    // TODO: Get from configuration or ParameterStore.
-    public const string SNS_TOPIC_ARN = "YourSnsTopicArn"; private const string RSS_HTTP_CLIENT_NAME = "SecRssClient";
+    public const string SNS_TOPIC_ARN = "SnsTopicArn-YouCouldGetThisFromConfigOrParameterStore";
+    private const string RSS_HTTP_CLIENT_NAME = "SecRssClient";
     internal int MAXIMUM_EVENTS_TO_PUBLISH_PER_INVOCATION = 1000;
     internal const int EVENTS_TO_FETCH_PER_REQUEST = 100;
 
@@ -38,7 +39,6 @@ public class Function
     // </summary>
     public Function() : this(null)
     {
-
     }
 
     /// <summary>
@@ -59,7 +59,7 @@ public class Function
         serviceCollection.AddHttpClient(RSS_HTTP_CLIENT_NAME, client =>
         {
             client.DefaultRequestHeaders.Host = "www.sec.gov";
-            client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (YourCompany yourcompany@example.org)");
+            client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (none email@example.org)");
         })
         .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
         {
@@ -69,6 +69,11 @@ public class Function
         serviceCollection.TryAddSingleton<IAmazonSimpleNotificationService>(serviceProvider =>
         {
             return new AmazonSimpleNotificationServiceClient(new AmazonSimpleNotificationServiceConfig { RegionEndpoint = Amazon.RegionEndpoint.USEast1 });
+        });
+
+        serviceCollection.TryAddSingleton<IAmazonSimpleSystemsManagement>(serviceProvider =>
+        {
+            return new AmazonSimpleSystemsManagementClient(new AmazonSimpleSystemsManagementConfig { RegionEndpoint = Amazon.RegionEndpoint.USEast1 });
         });
 
         serviceCollection.TryAddSingleton<ILambdaRunTimestampManager, LastRunTimestampManager>();
@@ -101,11 +106,8 @@ public class Function
 
             string baseUrl = "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&CIK=&type=&company=&dateb=&owner=include&start={0}&count={1}&output=atom";
             var httpClient = _httpClientFactory.CreateClient(RSS_HTTP_CLIENT_NAME);
-            var lastRunTimestamp = await _lambdaRunTimestampManager.GetLastRunTimestampEasternAsync();
+            var lastRunTimestamp = await _lambdaRunTimestampManager.GetLastRunTimestampAsync();
             _logger.LogInformation("Last run timestamp: {LastRunTimestamp}", lastRunTimestamp);
-
-            _logger.LogInformation("Setting last run timestamp converting utc now to eastern, {Now}.", DateTime.UtcNow);
-            await _lambdaRunTimestampManager.SetLastRunTimestampAsync(DateTime.UtcNow);
 
             var entriesPublished = 0;
 
@@ -128,8 +130,8 @@ public class Function
                     break;
                 }
 
-                // The entries' updated timestamps are deserialized to local.
-                var entries = deserializedFeed.Entries.Where(x => x.Updated > lastRunTimestamp);
+                // The entries' updated timestamps are deserialized in local time.
+                var entries = deserializedFeed.Entries.Where(x => x.Updated > lastRunTimestamp.LocalDateTime);
                 if (!entries.Any())
                 {
                     break;
@@ -155,7 +157,7 @@ public class Function
 
             // A lambda function error is not one that can be handled in a try/catch. If an error occurs, the function may be retried.
             // Depending on the use case consider setting this at the beginning of processing, or modifying the iterator logic to account for this.
-            await _lambdaRunTimestampManager.SetLastRunTimestampAsync(DateTime.UtcNow);
+            await _lambdaRunTimestampManager.SetLastRunTimestampAsync(DateTimeOffset.UtcNow);
 
             _logger.LogInformation("Finished processing feed and published {EntriesPublished} entries.", entriesPublished);
         }

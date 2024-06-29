@@ -1,6 +1,7 @@
 using Amazon.Lambda.TestUtilities;
 using Amazon.SimpleNotificationService;
 using Amazon.SimpleNotificationService.Model;
+using Amazon.SimpleSystemsManagement;
 using LatestFilingsEventPublisher.UnitTests;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -14,18 +15,6 @@ namespace LatestFilingsEventPublisher.Tests;
 
 public class FunctionTests
 {
-    /// <summary>
-    /// Test to help debugging or troubleshooting locally. The actual dependencies will be registered.
-    /// </summary>
-    /// <returns></returns>
-    [Fact]
-    public async Task Debug_Helper()
-    {
-        ServiceCollection serviceCollection = new();
-        var function = new Function(serviceCollection);
-        await function.FunctionHandler(new TestLambdaContext());
-    }
-
     /// <summary>
     /// Tests that the required <see cref="Function"/> services are registered in the DI container.
     /// </summary>
@@ -43,6 +32,7 @@ public class FunctionTests
         Assert.NotNull(function.ServiceProvider.GetService(typeof(ILogger<Function>)));
         Assert.NotNull(function.ServiceProvider.GetService(typeof(IHttpClientFactory)));
         Assert.NotNull(function.ServiceProvider.GetService(typeof(IAmazonSimpleNotificationService)));
+        Assert.NotNull(function.ServiceProvider.GetService(typeof(IAmazonSimpleSystemsManagement)));
         Assert.NotNull(function.ServiceProvider.GetService(typeof(ILambdaRunTimestampManager)));
         Assert.NotNull(function.ServiceProvider.GetService(typeof(XmlSerializer)));
     }
@@ -54,10 +44,10 @@ public class FunctionTests
     /// <param name="expectedPublishedEventsCount">The number of times we expect to publish an event based on the given feed data.</param>
     /// <param name="lastRunDateTime">Datetime representing the last successful processing time.</param>
     [Theory]
-    [InlineData(TestFeedData.FeedWithNoEntries, 0, "2024-03-15T13:35:35-04:00")] // No entries in the feed.
-    [InlineData(TestFeedData.FeedWithTwoEntries, 1, "2024-03-15T13:34:10-04:00")] // 2 entries in the feed, but only 1 is newer than the last run timestamp.
-    [InlineData(TestFeedData.FeedWithTwoEntries, 2, "2024-03-01T04:00:00Z")] // 2 entries in the feed, both newer than the last run timestamp.
-    [InlineData(TestFeedData.FeedWithTwoEntries, 0, "2999-12-01T12:00:00Z")] // 2 entries in the feed, but both are older than the last run timestamp.
+    [InlineData(TestFeedData.FeedWithNoEntries, 0, "3/15/2024 10:27:52 PM +00:00")] // No entries in the feed.
+    [InlineData(TestFeedData.FeedWithTwoEntries, 1, "3/15/2024 17:34:10 PM +00:00")] // 2 entries in the feed, but only 1 is newer than the last run timestamp.
+    [InlineData(TestFeedData.FeedWithTwoEntries, 2, "3/15/2002 10:27:00 PM +00:00")] // 2 entries in the feed, both newer than the last run timestamp.
+    [InlineData(TestFeedData.FeedWithTwoEntries, 0, "1/10/2200 10:27:00 PM +00:00")] // 2 entries in the feed, but both are older than the last run timestamp.
     public async void FunctionHandler_ValidFeedData_PublishesExpectedNumberOfEvents(string testFeedData, int expectedPublishedEventsCount, string lastRunDateTime)
     {
         // Arrange
@@ -85,9 +75,9 @@ public class FunctionTests
             .Returns(httpClient);
 
         // Set up the LastRunTimestampManager to return the test Theory last run timestamp.
-        lastRunTimestampManagerMock.Setup(m => m.GetLastRunTimestampEasternAsync())
-            .ReturnsAsync(DateTime.Parse(lastRunDateTime));
-        lastRunTimestampManagerMock.Setup(m => m.SetLastRunTimestampAsync(It.IsAny<DateTime>()));
+        lastRunTimestampManagerMock.Setup(m => m.GetLastRunTimestampAsync())
+            .ReturnsAsync(DateTimeOffset.Parse(lastRunDateTime));
+        lastRunTimestampManagerMock.Setup(m => m.SetLastRunTimestampAsync(It.IsAny<DateTimeOffset>()));
 
         // Set up the SNS client to return OK for the PublishAsync method.
         var snsConfigMock = new Mock<AmazonSimpleNotificationServiceConfig>();
@@ -119,7 +109,7 @@ public class FunctionTests
     }
 
     /// <summary>
-    /// When the request to get feed data consistently returns 100 new entries, the function should publish a maximum of 1000 events.
+    /// When the request to get feed data consistently returns 100 new entries, the function should publish a maximum of <see cref="Function.MAXIMUM_EVENTS_TO_PUBLISH_PER_INVOCATION"/> events.
     /// </summary>
     [Fact]
     public async void FunctionHandler_UnlimitedValidFeedData_PublishesMaximum1000Events()
@@ -128,8 +118,8 @@ public class FunctionTests
         var loggerMock = new Mock<ILogger<Function>>();
         var lastRunTimestampManagerMock = new Mock<ILambdaRunTimestampManager>();
 
-        // Set up the HTTP client to return a Feed with 100 entries.
-        // This mock will return the same 100 entries each time it's called in the loop to illustrate more than 1,000 entries are new since the last lambda invocation.
+        // Set up the HTTP client to return a Feed with 100 entries from the Test data.
+        // This mock will return the same 100 entries each time it's called in the loop to illustrate more than Function.MAXIMUM_EVENTS_TO_PUBLISH_PER_INVOCATION entries are new since the last lambda invocation.
         var mockHandler = new Mock<HttpMessageHandler>(MockBehavior.Strict);
         var mockResponse = new HttpResponseMessage
         {
@@ -150,9 +140,9 @@ public class FunctionTests
             .Returns(httpClient);
 
         // Set up the LastRunTimestampManager to return the test Theory last run timestamp.
-        lastRunTimestampManagerMock.Setup(m => m.GetLastRunTimestampEasternAsync())
-            .ReturnsAsync(DateTime.Parse("2000-03-15T13:34:10-04:00"));
-        lastRunTimestampManagerMock.Setup(m => m.SetLastRunTimestampAsync(It.IsAny<DateTime>()));
+        lastRunTimestampManagerMock.Setup(m => m.GetLastRunTimestampAsync())
+            .ReturnsAsync(DateTimeOffset.Parse("3/15/2000 17:34:10 PM +00:00"));
+        lastRunTimestampManagerMock.Setup(m => m.SetLastRunTimestampAsync(It.IsAny<DateTimeOffset>()));
 
         // Set up the SNS client to return OK for the PublishAsync method.
         var snsConfigMock = new Mock<AmazonSimpleNotificationServiceConfig>();
@@ -179,7 +169,7 @@ public class FunctionTests
 
         // Assert
         Assert.Null(exception);
-        Assert.Equal(1000, snsMock.Invocations.Count);
+        Assert.Equal(function.MAXIMUM_EVENTS_TO_PUBLISH_PER_INVOCATION, snsMock.Invocations.Count);
         Assert.Equal(1, lastRunTimestampManagerMock.Invocations.Count(x => x.Method.Name == nameof(ILambdaRunTimestampManager.SetLastRunTimestampAsync)));
     }
 
@@ -214,9 +204,9 @@ public class FunctionTests
             .Returns(httpClient);
 
         // Set up the LastRunTimestampManager to return the test Theory last run timestamp.
-        lastRunTimestampManagerMock.Setup(m => m.GetLastRunTimestampEasternAsync())
-            .ReturnsAsync(DateTime.Now);
-        lastRunTimestampManagerMock.Setup(m => m.SetLastRunTimestampAsync(It.IsAny<DateTime>()));
+        lastRunTimestampManagerMock.Setup(m => m.GetLastRunTimestampAsync())
+            .ReturnsAsync(DateTimeOffset.Now);
+        lastRunTimestampManagerMock.Setup(m => m.SetLastRunTimestampAsync(It.IsAny<DateTimeOffset>()));
 
         ServiceCollection serviceCollection = new();
         serviceCollection.AddSingleton(loggerMock.Object);
@@ -237,7 +227,7 @@ public class FunctionTests
     }
 
     /// <summary>
-    /// This may be a change detector test, but it's useful to prevent someone from accidentally exceeding the rate limit in testing and getting added to a deny list.
+    /// Using a setting that would exceed the rate limit of the SEC endpoint throws an exception.
     /// </summary>
     [Fact]
     public async void FunctionHandler_SettingsExceedRateLimit_ThrowsException()
