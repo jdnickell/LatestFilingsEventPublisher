@@ -3,7 +3,8 @@
 * This project is useful for monitoring the latest filings in near real time and potentially alerting or triggering other processes. 
 It is not for collecting and storing historical data. For that, you can explore other options from the SEC website. 
 
-* Triggered by [EventBridge Scheduler](https://docs.aws.amazon.com/scheduler/latest/UserGuide/setting-up.html) on any frequency > 10 seconds between 6 a.m. and 10 p.m. EST.
+* Triggered by [EventBridge Scheduler](https://docs.aws.amazon.com/scheduler/latest/UserGuide/setting-up.html) between 6 a.m. and 10 p.m. EST.                 
+The frequency should be set small enough to keep up with updates, but not so small that it exceeds the rate limits of the SEC website of 10 requests per second.
 * Polls the SEC website for the latest filings and publishes them to an SNS topic.
 * At the time of writing this, the SEC websites recommends polling the RSS feed for the latest filings to get as close to real time updates as possible. Read the docs here: https://www.sec.gov/os/webmaster-faq.
 
