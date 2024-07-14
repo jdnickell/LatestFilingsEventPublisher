@@ -12,9 +12,9 @@
 	</PropertyGroup>
 	<ItemGroup>
 		<PackageReference Include="Amazon.Lambda.Core" Version="2.2.0" />
-		<PackageReference Include="Amazon.Lambda.Serialization.SystemTextJson" Version="2.4.1" />
-		<PackageReference Include="AWSSDK.SimpleNotificationService" Version="3.7.301.13" />
-		<PackageReference Include="AWSSDK.SimpleSystemsManagement" Version="3.7.303.19" />
+		<PackageReference Include="Amazon.Lambda.Serialization.SystemTextJson" Version="2.4.3" />
+		<PackageReference Include="AWSSDK.SimpleNotificationService" Version="3.7.301.62" />
+		<PackageReference Include="AWSSDK.SimpleSystemsManagement" Version="3.7.305.4" />
 		<PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
 	</ItemGroup>

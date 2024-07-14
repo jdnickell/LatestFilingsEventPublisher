@@ -107,9 +107,6 @@ public class Function
             string baseUrl = "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&CIK=&type=&company=&dateb=&owner=include&start={0}&count={1}&output=atom";
             var httpClient = _httpClientFactory.CreateClient(RSS_HTTP_CLIENT_NAME);
             var lastRunTimestamp = await _lambdaRunTimestampManager.GetLastRunTimestampAsync();
-            _logger.LogInformation("Last run timestamp: {LastRunTimestamp}", lastRunTimestamp);
-
-            var entriesPublished = 0;
 
             // There are two ways to iterate through the feed: from 0 to maximum, or by paging in reverse order.
             // Paging in reverse order is the safest approach because you can update the last run timestamp and be sure that you won't publish duplicates in the event of a lambda failure,
@@ -137,15 +134,30 @@ public class Function
                     break;
                 }
 
-                entriesPublished += entries.Count();
-
-                foreach (var entry in entries)
+                foreach (var entry in entries.Where(x => !string.IsNullOrWhiteSpace(x.Link?.Href) && x.Category?.Label == "form type"))
                 {
-                    await _snsClient.PublishAsync(new PublishRequest
+                    var eventModel = new EventModel
+                    {
+                        FormType = entry.Category.Term,
+                        Summary = entry.Title,
+                        FilingUrl = entry.Link.Href
+                    };
+
+                    var message = JsonSerializer.Serialize(eventModel);
+
+                    var publishRequest = new PublishRequest
                     {
                         TopicArn = SNS_TOPIC_ARN,
-                        Message = JsonSerializer.Serialize(entry)
-                    });
+                        Message = message
+                    };
+
+                    var publishResponse = await _snsClient.PublishAsync(publishRequest);
+
+                    if (publishResponse.HttpStatusCode != HttpStatusCode.OK)
+                    {
+                        // no exception so we can continue publishing the next entries
+                        _logger.LogError("Failed to publish event with {Message}", message);
+                    }
                 }
 
                 // If we get less than the requested count, we have reached the end of the feed.
@@ -158,8 +170,6 @@ public class Function
             // A lambda function error is not one that can be handled in a try/catch. If an error occurs, the function may be retried.
             // Depending on the use case consider setting this at the beginning of processing, or modifying the iterator logic to account for this.
             await _lambdaRunTimestampManager.SetLastRunTimestampAsync(DateTimeOffset.UtcNow);
-
-            _logger.LogInformation("Finished processing feed and published {EntriesPublished} entries.", entriesPublished);
         }
     }
 }

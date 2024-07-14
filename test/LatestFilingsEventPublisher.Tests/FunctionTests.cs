@@ -139,7 +139,6 @@ public class FunctionTests
             .Setup(_ => _.CreateClient(It.IsAny<string>()))
             .Returns(httpClient);
 
-        // Set up the LastRunTimestampManager to return the test Theory last run timestamp.
         lastRunTimestampManagerMock.Setup(m => m.GetLastRunTimestampAsync())
             .ReturnsAsync(DateTimeOffset.Parse("3/15/2000 17:34:10 PM +00:00"));
         lastRunTimestampManagerMock.Setup(m => m.SetLastRunTimestampAsync(It.IsAny<DateTimeOffset>()));
@@ -203,7 +202,6 @@ public class FunctionTests
             .Setup(_ => _.CreateClient(It.IsAny<string>()))
             .Returns(httpClient);
 
-        // Set up the LastRunTimestampManager to return the test Theory last run timestamp.
         lastRunTimestampManagerMock.Setup(m => m.GetLastRunTimestampAsync())
             .ReturnsAsync(DateTimeOffset.Now);
         lastRunTimestampManagerMock.Setup(m => m.SetLastRunTimestampAsync(It.IsAny<DateTimeOffset>()));
@@ -247,5 +245,125 @@ public class FunctionTests
 
         // Assert
         Assert.NotNull(exception);
+    }
+
+    /// <summary>
+    /// Tests when the <see cref="IAmazonSimpleNotificationService.PublishAsync(PublishRequest, CancellationToken)"/> returns an unsuccessful response, an error is logged.
+    /// </summary>
+    [Fact]
+    public async void FunctionHandler_PublishResultSuccessful_NoErrorLogged()
+    {
+        // Arrange
+        var loggerMock = new Mock<ILogger<Function>>();
+        var lastRunTimestampManagerMock = new Mock<ILambdaRunTimestampManager>();
+
+        var mockHandler = new Mock<HttpMessageHandler>(MockBehavior.Strict);
+        var mockResponse = new HttpResponseMessage
+        {
+            StatusCode = HttpStatusCode.OK,
+            Content = new StringContent(TestFeedData.FeedWithTwoEntries)
+        };
+        mockHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.Is<HttpRequestMessage>(m => m.Method == HttpMethod.Get),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(mockResponse);
+        var httpClient = new HttpClient(mockHandler.Object);
+        var httpClientFactoryMock = new Mock<IHttpClientFactory>();
+        httpClientFactoryMock
+            .Setup(_ => _.CreateClient(It.IsAny<string>()))
+            .Returns(httpClient);
+
+        lastRunTimestampManagerMock.Setup(m => m.GetLastRunTimestampAsync())
+            .ReturnsAsync(DateTimeOffset.Parse("3/15/2024 17:34:10 PM +00:00"));
+        lastRunTimestampManagerMock.Setup(m => m.SetLastRunTimestampAsync(It.IsAny<DateTimeOffset>()));
+
+        // Set up the SNS client to return OK for the PublishAsync method.
+        var snsConfigMock = new Mock<AmazonSimpleNotificationServiceConfig>();
+        var snsMock = new Mock<IAmazonSimpleNotificationService>();
+        snsMock.Setup(sns => sns.PublishAsync(It.IsAny<PublishRequest>(), It.IsAny<CancellationToken>()))
+           .ReturnsAsync(new PublishResponse { HttpStatusCode = HttpStatusCode.OK });
+
+        ServiceCollection serviceCollection = new();
+        serviceCollection.AddSingleton(loggerMock.Object);
+        serviceCollection.AddSingleton(httpClientFactoryMock.Object);
+        serviceCollection.AddSingleton(lastRunTimestampManagerMock.Object);
+        serviceCollection.AddSingleton(snsConfigMock.Object);
+        serviceCollection.AddSingleton(snsMock.Object);
+
+        var context = new TestLambdaContext();
+        var function = new Function(serviceCollection);
+
+        // Act
+        var exception = await Record.ExceptionAsync(async () =>
+        {
+            await function.FunctionHandler(context);
+        });
+
+        // Assert
+        Assert.Null(exception);
+        Assert.DoesNotContain(loggerMock.Invocations, i => i.Arguments[0].ToString().Contains("Failed to publish event"));
+    }
+
+    /// <summary>
+    /// Tests when the <see cref="IAmazonSimpleNotificationService.PublishAsync(PublishRequest, CancellationToken)"/> returns an unsuccessful response, an error is logged.
+    /// </summary>
+    [Fact]
+    public async void FunctionHandler_PublishResultUnsuccessful_ErrorLogged()
+    {
+        // Arrange
+        var loggerMock = new Mock<ILogger<Function>>();
+        var lastRunTimestampManagerMock = new Mock<ILambdaRunTimestampManager>();
+
+        var mockHandler = new Mock<HttpMessageHandler>(MockBehavior.Strict);
+        var mockResponse = new HttpResponseMessage
+        {
+            StatusCode = HttpStatusCode.OK,
+            Content = new StringContent(TestFeedData.FeedWithTwoEntries)
+        };
+        mockHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.Is<HttpRequestMessage>(m => m.Method == HttpMethod.Get),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(mockResponse);
+        var httpClient = new HttpClient(mockHandler.Object);
+        var httpClientFactoryMock = new Mock<IHttpClientFactory>();
+        httpClientFactoryMock
+            .Setup(_ => _.CreateClient(It.IsAny<string>()))
+            .Returns(httpClient);
+
+        lastRunTimestampManagerMock.Setup(m => m.GetLastRunTimestampAsync())
+            .ReturnsAsync(DateTimeOffset.Parse("3/15/2024 17:34:10 PM +00:00"));
+        lastRunTimestampManagerMock.Setup(m => m.SetLastRunTimestampAsync(It.IsAny<DateTimeOffset>()));
+
+        // Set up the SNS client to return BadRequest for the PublishAsync method.
+        var snsConfigMock = new Mock<AmazonSimpleNotificationServiceConfig>();
+        var snsMock = new Mock<IAmazonSimpleNotificationService>();
+        snsMock.Setup(sns => sns.PublishAsync(It.IsAny<PublishRequest>(), It.IsAny<CancellationToken>()))
+           .ReturnsAsync(new PublishResponse { HttpStatusCode = HttpStatusCode.BadRequest });
+
+        ServiceCollection serviceCollection = new();
+        serviceCollection.AddSingleton(loggerMock.Object);
+        serviceCollection.AddSingleton(httpClientFactoryMock.Object);
+        serviceCollection.AddSingleton(lastRunTimestampManagerMock.Object);
+        serviceCollection.AddSingleton(snsConfigMock.Object);
+        serviceCollection.AddSingleton(snsMock.Object);
+
+        var context = new TestLambdaContext();
+        var function = new Function(serviceCollection);
+
+        // Act
+        var exception = await Record.ExceptionAsync(async () =>
+        {
+            await function.FunctionHandler(context);
+        });
+
+        // Assert
+        Assert.Null(exception);
+        Assert.Contains(loggerMock.Invocations, i => i.Arguments.Any(x => x.ToString().Contains("Failed to publish event")));
     }
 }

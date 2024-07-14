@@ -11,7 +11,7 @@
     "configuration" : "Release",
     "function-runtime" : "dotnet8",
     "function-memory-size" : 512,
-    "function-timeout"     : 15,
+    "function-timeout"     : 30,
     "function-handler"     : "LatestFilingsEventPublisher::LatestFilingsEventPublisher.Function::FunctionHandler",
     "function-role"        : "TODORoleARN",
     "framework"            : "net8.0",
